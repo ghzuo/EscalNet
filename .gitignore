@@ -1,0 +1,11 @@
+*.o
+src.*
+.DS_Store
+build
+\#*\#
+*.vscode/ipch
+.history
+.vstags
+__pycache__
+*.swp
+.ipynb_checkpoints
