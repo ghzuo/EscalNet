@@ -10,10 +10,11 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 13:55:16
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2023-07-25 11:01:58
+@Last Modified Time: 2025-04-21 Monday 20:04:44
 '''
 
 import numpy as np
+import copy
 import torch
 
 
@@ -80,23 +81,32 @@ class EncoderNet:
         )
 
         # do training
+        best_model = None
+        best_ratio = 0.0
         for epoch in range(1, n_epochs + 1):
+            self.net.train()
             for X, y in data:
                 output = self.net(X)
                 ls = self.loss(output, y.view(-1, 1))
                 self.optim.zero_grad()
                 ls.backward()
                 self.optim.step()
-            if (self.info > 1):
-                print('epoch %d, loss: %f' % (epoch, ls.item()))
+            ratio = self.validate(
+                self.X, self.y, None)
+            if ratio > best_ratio:
+                best_model = copy.deepcopy(self.net.state_dict())
+                best_ratio = ratio
+        self.net.load_state_dict(best_model)
 
     def validate(self, X_val, y_val, prompt="Validate:"):
-        output = self.net(X_val)
-        ls = self.loss(output, y_val.view(-1, 1))
-        q = ls.item()
-        r = np.sqrt(1 - q) if q < 1 else 0
-        if self.info > 0:
-            print(prompt, r, q, sep=" ")
+        self.net.eval()
+        with torch.no_grad():
+            output = self.net(X_val)
+            ls = self.loss(output, y_val.view(-1, 1))
+            q = ls.item()
+            r = np.sqrt(1 - q) if q < 1 else 0
+            if self.info > 0 and prompt is not None:
+                print(prompt, r, q, sep=" ")
         return r
 
     def preTrain(self, kfold=0, n_epochs=5, kappa=2):
