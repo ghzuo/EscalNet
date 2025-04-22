@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 13:55:16
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2025-04-21 Monday 20:04:44
+@Last Modified Time: 2025-04-22 Tuesday 11:27:27
 '''
 
 import numpy as np
@@ -54,24 +54,7 @@ class EncoderNet:
         self.y, self.ym, self.ys = normlize(
             torch.tensor(self.fft.multi_exiFFT(kappa), dtype=torch.float))
 
-    def get_kfold_data(self, kfold, i, X, y):
-        fold_size = X.shape[0] // kfold
-        if i == 0:
-            X_valid, y_valid = X[:fold_size], y[:fold_size]
-            X_train, y_train = X[fold_size:], y[fold_size:]
-        elif i == kfold - 1:
-            val_start = i * fold_size
-            X_valid, y_valid = X[val_start:], y[val_start:]
-            X_train, y_train = X[:val_start], y[:val_start]
-        else:
-            val_start = i * fold_size
-            val_end = val_start + fold_size
-            X_valid, y_valid = X[val_start:val_end], y[val_start:val_end]
-            X_train = torch.cat((X[:val_start], X[val_end:]), dim=0)
-            y_train = torch.cat((y[:val_start], y[val_end:]), dim=0)
-        return X_train, y_train, X_valid, y_valid
-
-    def train(self, X, y, n_epochs=3):
+    def train(self, X, y, n_epochs=3, prompt="Validate:"):
         # set dataset
         data = torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X, y),
@@ -82,7 +65,8 @@ class EncoderNet:
 
         # do training
         best_model = None
-        best_ratio = 0.0
+        best_r = 0.0
+        best_q = 0.0
         for epoch in range(1, n_epochs + 1):
             self.net.train()
             for X, y in data:
@@ -91,37 +75,29 @@ class EncoderNet:
                 self.optim.zero_grad()
                 ls.backward()
                 self.optim.step()
-            ratio = self.validate(
-                self.X, self.y, None)
-            if ratio > best_ratio:
+            r, q = self.validate(self.X, self.y)
+            if r > best_r:
                 best_model = copy.deepcopy(self.net.state_dict())
-                best_ratio = ratio
+                best_r = r
+                best_q = q
         self.net.load_state_dict(best_model)
+        print(f'{prompt}: r={best_r:.4f} and q={best_q:.4f}')
+        return best_r, best_q
 
-    def validate(self, X_val, y_val, prompt="Validate:"):
+    def validate(self, X_val, y_val):
         self.net.eval()
         with torch.no_grad():
             output = self.net(X_val)
             ls = self.loss(output, y_val.view(-1, 1))
             q = ls.item()
             r = np.sqrt(1 - q) if q < 1 else 0
-            if self.info > 0 and prompt is not None:
-                print(prompt, r, q, sep=" ")
-        return r
+        return r, q
 
-    def preTrain(self, kfold=0, n_epochs=5, kappa=2):
+    def preTrain(self, n_epochs=5, kappa=2):
         self.setY(kappa)
-        if (kfold == 0):
-            self.train(self.X, self.y, n_epochs=n_epochs)
-            self.validate(
-                self.X, self.y, f"Validate for PreTrain (kappa={kappa}):")
-        else:
-            for i in range(kfold):
-                X_T, y_T, X_V, y_V = self.get_kfold_data(
-                    kfold, i, self.X, self.y)
-                self.train(X_T, y_T, n_epochs=n_epochs)
-                self.validate(X_V, y_V, f"Summary for fold ({i+1}/{kfold}):")
-
+        self.train(self.X, self.y, n_epochs, 
+                    f"Validate for PreTrain (kappa={kappa:d})")
+ 
     def score(self, kmax=50, kmin=2, nk=100, n_epochs=2):
         # type the kappa
         kmax = len(self.fft.F[0]) if kmax < kmin else min(
@@ -132,9 +108,8 @@ class EncoderNet:
         qmc = np.array([klist, np.zeros(len(klist))]).T
         for item in qmc:
             self.setY(item[0])
-            self.train(self.X, self.y, n_epochs=n_epochs)
-            item[1] = self.validate(self.X, self.y,
-                                    f"Validate for Score (kappa={item[0]}):")
+            item[1], _ = self.train(self.X, self.y, n_epochs, 
+                       f"Validate for Score (kappa={item[0]:.0f})")
 
         # the result
         result = {'list': qmc}
@@ -145,8 +120,8 @@ class EncoderNet:
     def scale(self, kappa, n_epochs=2):
         # retrain the model
         self.setY(kappa)
-        self.train(self.X, self.y, n_epochs=n_epochs)
-        self.validate(self.X, self.y, f"Validate for Scaling (kappa={kappa}):")
+        self.train(self.X, self.y, n_epochs, 
+                   f"Validate for Scaling (kappa={kappa})")
 
         # add hook on features layer
         features = []
