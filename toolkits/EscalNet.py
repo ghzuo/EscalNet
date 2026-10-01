@@ -9,7 +9,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2026-09-11 Friday 21:12:42
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 13:40:34
+@Last Modified Time: 2026-10-01 Thursday 22:57:06
 '''
 
 import pickle
@@ -50,24 +50,38 @@ def parse_args():
     # network
     p.add_argument("--nFeature", type=int, default=32,
                    help="feature size of the network")
+    p.add_argument("--nLayers", type=int, default=3,
+                   help="number of hidden layers in the network")
+    p.add_argument("--nHidden", type=int, default=None,
+                   help="hidden layer size of the network")
+
+    # training
+    p.add_argument("--num_epochs", type=int, default=5,
+                   help="number of epochs during training")
+    p.add_argument("--kfold", type=int, default=5,
+                   help="number of folds for cross-validation")
+    p.add_argument("--learning_rate", type=float, default=0.01,
+                   help="learning rate for EncoderNet")
+    p.add_argument("--device", type=str, default=None,
+                   help="device for EncoderNet")
     p.add_argument("--decorr", type=float, default=0.01,
                    help="correlation penalty for between features")
     p.add_argument("--balance", type=float, default=0.01,
                    help="unbalance penalty for feature")
 
-    # training
+    # options for data loading
     p.add_argument("--batch_size", type=int, default=128,
                    help="minibatch size for EncoderNet")
-    p.add_argument("--num_epochs", type=int, default=5,
-                   help="number of epochs during training")
-    p.add_argument("--kfold", type=int, default=5,
-                   help="number of folds for cross-validation")
     p.add_argument("--shuffle", action="store_false",
                    help="do not shuffle the dataset")
-    p.add_argument("--learning_rate", type=float, default=0.01,
-                   help="learning rate for EncoderNet")
-    p.add_argument("--device", type=str, default=None,
-                   help="device for EncoderNet")
+    p.add_argument('--num_workers', type=int, default=4,
+                   help='Number of workers for data loading (default: 4)')
+    p.add_argument('--pin_memory', action='store_false',
+                   help='Disable pin memory for faster GPU transfer')
+    p.add_argument('--prefetch_factor', type=int, default=2,
+                   help='Prefetch factor for data loading (default: 2)')
+    p.add_argument('--persistent_workers', action='store_false',
+                   help='Disable persistent workers for multiple epochs')
 
     # kappa
     p.add_argument("--score_kmax", type=int, default=40,
@@ -87,9 +101,9 @@ def parse_args():
 
     # set output path
     if args.output is None:
-        args.output = f"{os.path.basename(args.fname)}-{args.feature}"
+        args.output = f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers}L{args.nFeature}F"
     elif (args.output.endswith("/")):
-        args.output += f"{os.path.basename(args.fname)}-{args.feature}"
+        args.output += f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers}L{args.nFeature}F"
     # set model cache path
     if args.cache is None:
         args.cache = os.path.join(os.path.dirname(args.output), "models",
@@ -159,25 +173,36 @@ def main(args):
 
     # --- setup the network ---
     nInput = efft.Xx.shape[1]
-    net = mt.MLP3L(nInput, nFeature=args.nFeature)
+    net = mt.MLPxL(nInput, nFeature=args.nFeature,
+                   nHidden=args.nHidden, nLayers=args.nLayers)
     data["net"] = net.__name__
 
     # --- setup model and train ---
+    # set performance optimization arguments
+    kwargs = {
+        'num_workers': args.num_workers,
+        'pin_memory': args.pin_memory,
+        'prefetch_factor': args.prefetch_factor,
+        'persistent_workers': args.persistent_workers,
+        'batch_size': args.batch_size
+    }
+
     xmap = mt.EncoderNet(net, efft, lr=args.learning_rate,
-                         cachePref=args.cache,
+                         cachePref=args.cache, shuffle=args.shuffle,
                          num_epochs=args.num_epochs, kfold=args.kfold,
-                         shuffle=args.shuffle, batch_size=args.batch_size,
                          decorr=args.decorr, balance=args.balance,
-                         device=args.device)
+                         device=args.device, **kwargs)
     xmap.info()
 
     # --- score, scale and saliency ---
     if args.kappa is None:
         # score scan
-        klist = np.arange(args.score_kmin, args.score_kmax+1, args.score_kstep, dtype=int)
+        klist = np.arange(args.score_kmin, args.score_kmax +
+                          1, args.score_kstep, dtype=int)
         qmclist = np.array([klist, np.full(len(klist), np.nan, dtype=float)]).T
         if "qmc" in data:
-            lookup = dict(zip(data["qmc"]["list"][:,0], data["qmc"]["list"][:,1]))
+            lookup = dict(zip(data["qmc"]["list"][:, 0],
+                          data["qmc"]["list"][:, 1]))
             new_col = np.array([lookup.get(k, np.nan) for k in qmclist[:, 0]])
             qmclist[:, 1] = new_col
         data["qmc"] = xmap.score(qmclist)
@@ -192,7 +217,8 @@ def main(args):
     # --- save result to the pkl file ---
     with open(datafile, "wb") as f:
         pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
-    logging.info(f"\n=== The result has been written to: {args.output}.pkl ===")
+    logging.info(
+        f"\n=== The result has been written to: {args.output}.pkl ===")
 
 
 if __name__ == "__main__":

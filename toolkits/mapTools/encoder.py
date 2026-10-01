@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 13:55:16
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 12:38:58
+@Last Modified Time: 2026-10-01 Thursday 22:58:44
 '''
 
 import sys
@@ -61,13 +61,12 @@ class ModKFold:
 
 class EncoderNet:
     def __init__(self, net, fft,
-                 cachePref=None,
+                 cachePref=None, shuffle=True,
                  kfold=5, num_epochs=10,
                  loss=torch.nn.MSELoss(),
-                 batch_size=50, shuffle=True,
                  optim=torch.optim.Adam, lr=0.001,
                  balance=0.01, decorr=0.01,
-                 device=None):
+                 device=None, **kwargs):
         self.net = net
         self.fft = fft
         self.cachePref = cachePref
@@ -75,7 +74,9 @@ class EncoderNet:
         self.kfold = kfold
         self.num_epochs = num_epochs
         self.loss = loss
-        self.batch_size = batch_size
+        self.kwargs = kwargs
+        # default DataLoader options (overridable via kwargs)
+        self.kwargs.setdefault('batch_size', 50)
         self.shuffle = shuffle
         self.balance = balance
         self.decorr = decorr
@@ -92,12 +93,12 @@ class EncoderNet:
         logging.info("\n=== EncoderNet Info ===")
         logging.info(f"--- The input data:\n*** The X shape: {self.X.shape}")
         logging.info(f"*** The FFT base shape: {self.fft.F[0].shape}")
-        logging.info(f"\n--- The network is:\n{self.net}")
+        logging.info(f"\n--- The network is: {self.net.__name__}\n{self.net}")
         logging.info(f"\n--- The training information is as follows:")
         logging.info(f"*** KFold: {self.kfold}")
         logging.info(f"*** Num Epochs: {self.num_epochs}")
         logging.info(f"*** Loss: {self.loss.__class__.__name__}")
-        logging.info(f"*** Batch Size: {self.batch_size}")
+        logging.info(f"*** Batch Size: {self.kwargs['batch_size']}")
         logging.info(f"*** Shuffle: {self.shuffle}")
         logging.info(f"*** Optimizer: {self.optim.__class__.__name__}")
         logging.info(
@@ -167,15 +168,15 @@ class EncoderNet:
         # set train dataloader
         train_loader = torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X_train, y_train),
-            batch_size=self.batch_size,  # mini batch size
             shuffle=self.shuffle,
+            **self.kwargs
         )
 
         # set valid dataloader
         valid_loader = torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X_valid, y_valid),
-            batch_size=self.batch_size,  # mini batch size
             shuffle=False,  # no shuffle for valid
+            **self.kwargs
         )
 
         # for the best model
@@ -200,8 +201,8 @@ class EncoderNet:
         # set test dataloader
         test_loader = torch.utils.data.DataLoader(
             dataset=torch.utils.data.TensorDataset(X_test, y_test),
-            batch_size=self.batch_size,  # mini batch size
             shuffle=False,  # no shuffle for test
+            **self.kwargs
         )
         return self._validate(test_loader)
 
@@ -249,10 +250,10 @@ class EncoderNet:
                 self.net.load_state_dict(torch.load(netpt, weights_only=True))
                 best_loss = self.test(self.X, self.y)
                 logging.info(f"\n=== Loading the best model from: {netpt} ===")
-    
+
         r = np.sqrt(1 - best_loss) if best_loss < 1 else 0
         logging.info(f"*** Best Model for kappa = {kappa:.0f} | Loss: {best_loss:.4f} "
-                    f"| Coefficient: {r:.4f}")
+                     f"| Coefficient: {r:.4f}")
         return r
 
     def score(self, qmclist):
@@ -263,7 +264,8 @@ class EncoderNet:
             if np.isnan(item[1]):
                 item[1] = self.oneKappa(item[0])
             else:
-                logging.info(f"*** Skip kappa = {item[0]:.0f} as it has been set as {item[1]:.4f}")
+                logging.info(
+                    f"*** Skip kappa = {item[0]:.0f} as it has been set as {item[1]:.4f}")
         qmc = {'list': qmclist}
         # Get the peak value of qmc
         qmc['KappaMax'], qmc['qmcMax'] = qmclist[np.argmax(qmclist[:, 1])]
@@ -289,7 +291,8 @@ class EncoderNet:
         }
         handle.remove()
         # output the rescaled info
-        logging.info(f"\n=== The result ===\n*** rescl keys: {list(rescl.keys())}")
+        logging.info(
+            f"\n=== The result ===\n*** rescl keys: {list(rescl.keys())}")
         for k, v in rescl.items():
             arr = np.asarray(v)
             logging.info(
@@ -333,34 +336,20 @@ class LR(torch.nn.Module):
         return self.output(x)
 
 
-# the multi-layer Perceptron
-class MLP2L(torch.nn.Module):
-    def __init__(self, nInput, nFeature=2, **kwargs):
-        super(MLP2L, self).__init__(**kwargs)
-        self.__name__ = 'MLP2L'
-        nHidden = int((nInput + nFeature)/2)
+class MLPxL(torch.nn.Module):
+    def __init__(self, nInput, nFeature=20, nHidden=None, nLayers=3, **kwargs):
+        super(MLPxL, self).__init__(**kwargs)
+        if nLayers < 2:
+            raise ValueError(f"nLayers must be at least 2 (current: {nLayers:d})")
+        if nHidden is None:
+            nHidden = int((nInput + nFeature)/2)
+
+        self.__name__ = f"MLP{nLayers:d}L{nFeature:d}F"
         actfunc = torch.nn.ELU
         self.input = torch.nn.Linear(nInput, nHidden)
         self.actI = actfunc()
-        self.feature = torch.nn.Linear(nHidden, nFeature)
-        self.actF = actfunc()
-        self.output = torch.nn.Linear(nFeature, 1)
-
-    def forward(self, x):
-        outI = self.actI(self.input(x))
-        outF = self.actF(self.feature(outI + x))
-        return self.output(outF)
-
-
-class MLP3L(torch.nn.Module):
-    def __init__(self, nInput, nFeature=20, **kwargs):
-        super(MLP3L, self).__init__(**kwargs)
-        self.__name__ = 'MLP3L'
-        nHidden = int((nInput + nFeature)/2)
-        actfunc = torch.nn.ELU
-        self.input = torch.nn.Linear(nInput, nHidden)
-        self.actI = actfunc()
-        self.hidden = torch.nn.Linear(nHidden, nHidden)
+        self.hidden_layers = torch.nn.ModuleList(
+            [torch.nn.Linear(nHidden, nHidden) for _ in range(nLayers - 2)])
         self.actH = actfunc()
         self.feature = torch.nn.Linear(nHidden, nFeature)
         self.actF = actfunc()
@@ -368,6 +357,7 @@ class MLP3L(torch.nn.Module):
 
     def forward(self, x):
         outI = self.actI(self.input(x))
-        outH = self.actH(self.hidden(outI))
-        outF = self.actF(self.feature(outH))
+        for layer in self.hidden_layers:
+            outI = self.actH(layer(outI) + outI)
+        outF = self.actF(self.feature(outI))
         return self.output(outF)
