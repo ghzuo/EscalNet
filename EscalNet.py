@@ -17,10 +17,11 @@ import argparse
 import logging
 import os
 import numpy as np
-from mapTools import encoder as mt
-from Etranform import Efft as et
-import basicTools as bt
 import sys
+
+from toolkits.mapTools import encoder as mt
+from toolkits.Etranform import Efft as et
+from toolkits import basicTools as bt
 
 
 def parse_args():

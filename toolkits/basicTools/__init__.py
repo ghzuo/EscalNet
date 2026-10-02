@@ -15,4 +15,3 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 
 
 __all__ = ['dist', 'evalute', 'feature', 'Lmat', 'segment', 'plot']
-from basicTools import *

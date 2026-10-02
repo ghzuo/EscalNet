@@ -19,8 +19,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import KMeans
 
-import basicTools as bt
-import outplot as op
+from toolkits import basicTools as bt
+from toolkits import outplot as op
 
 
 def parse_args():
