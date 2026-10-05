@@ -15,7 +15,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 
 
 import numpy as np
-from basicTools.dist import euclidean
+from .dist import euclidean
 
 
 # for sample the cluster point

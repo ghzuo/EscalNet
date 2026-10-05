@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 11:06:05
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 14:08:23
+@Last Modified Time: 2026-10-02 Friday 21:49:27
 '''
 
 import logging
@@ -46,10 +46,13 @@ class LinearRegress:
         res = np.linalg.lstsq(
             self.X, self.fft.multi_exiFFT(kappa, kstart))
         result = {'A': res[0][1:]}
-        if self.fft.X0 is list:
-            result['X'] = [x*result['A'] for x in self.fft.X0]
-            result['Ee'] = [np.dot(x, result['A']) for x in self.fft.X0]
+        if type(self.fft.E0) is list:
+            num_traj = len(self.fft.E0)
+            len_traj = len(self.fft.E0[0])
+            Xlist = list(self.fft.Xx.reshape(num_traj, len_traj, -1))
+            result['X'] = [x*result['A'] for x in Xlist]
+            result['Ee'] = [np.dot(x, result['A']) for x in Xlist]
         else:
-            result['X'] = self.fft.X0*result['A']
-            result['Ee'] = np.dot(self.fft.X0, result['A'])
+            result['X'] = self.fft.Xx*result['A']
+            result['Ee'] = np.dot(self.fft.Xx, result['A'])
         return result

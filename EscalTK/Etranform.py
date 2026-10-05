@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2022-08-21 22:32:17
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 14:05:47
+@Last Modified Time: 2026-10-02 Friday 21:03:33
 '''
 
 
@@ -19,7 +19,6 @@ import numpy as np
 class Efft:
     def __init__(self, X0, E0, ufreq):
         self.ufreq = ufreq
-        self.X0 = X0
         self.E0 = E0
         if all([type(X0) is list, type(E0) is list]):
             Xx = np.concatenate(X0)
@@ -27,7 +26,7 @@ class Efft:
         else:
             Xx = X0
             self.F = [self.exFFT(E0)]
-        self.Xx = np.array((X0 - np.mean(X0, axis=0)) / np.std(X0, axis=0))
+        self.Xx = np.array((Xx - np.mean(Xx, axis=0)) / np.std(Xx, axis=0))
 
     def exFFT(self, tdata):
         exdata = np.append(tdata, tdata[-1::-1])  # even extension

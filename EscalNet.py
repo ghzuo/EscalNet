@@ -9,7 +9,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2026-09-11 Friday 21:12:42
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 22:57:06
+@Last Modified Time: 2026-10-05 Monday 15:21:29
 '''
 
 import pickle
@@ -19,16 +19,15 @@ import os
 import numpy as np
 import sys
 
-from toolkits.mapTools import encoder as mt
-from toolkits.Etranform import Efft as et
-from toolkits import basicTools as bt
+from EscalTK.mapTools import encoder as mt
+from EscalTK.Etranform import Efft as et
+from EscalTK import basicTools as bt
 
 
 def parse_args():
     p = argparse.ArgumentParser(
         description="Obtain the EscalNet rescale representation and "
-                    "save it to a Python pickle file.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                    "save it to a Python pickle file.")
 
     # I/O
     p.add_argument("-f", "--fname", default="Chignolin_375",
@@ -42,53 +41,69 @@ def parse_args():
     # feature / resampling
     p.add_argument("--feature", default="dih", choices=["dih", "dist"],
                    help="input feature: dih (ramachandran) or dist "
-                        "(Ca-Ca distance)")
+                        "(Ca-Ca distance)" ", (default: %(default)s)")
     p.add_argument("--skip", type=int, default=1,
-                   help="frame stride for resampling")
+                   help="frame stride for resampling, (default: %(default)s)")
     p.add_argument("--imax", type=int, default=sys.maxsize,
-                   help="max frame index to read (default: use all frames)")
+                   help="max frame index to read, (default: all)")
 
     # network
-    p.add_argument("--nFeature", type=int, default=32,
-                   help="feature size of the network")
-    p.add_argument("--nLayers", type=int, default=3,
-                   help="number of hidden layers in the network")
+    p.add_argument("--nFeature", type=int, default=16,
+                   help="feature size of the network"
+                   ", (default: %(default)s)")
+    p.add_argument("--nLayers", type=int, default=1,
+                   help="number of hidden layers in the network"
+                   ", (default: %(default)s)")
     p.add_argument("--nHidden", type=int, default=None,
-                   help="hidden layer size of the network")
+                   help="hidden layer size of the network"
+                   ", (default: (nInput + nOutput) // 2)")
 
     # training
     p.add_argument("--num_epochs", type=int, default=5,
-                   help="number of epochs during training")
+                   help="number of epochs during training"
+                   ", (default: %(default)s)")
     p.add_argument("--kfold", type=int, default=5,
-                   help="number of folds for cross-validation")
+                   help="number of folds for cross-validation"
+                   ", (default: %(default)s)")
     p.add_argument("--learning_rate", type=float, default=0.01,
-                   help="learning rate for EncoderNet")
+                   help="learning rate for EncoderNet"
+                   ", (default: %(default)s)")
     p.add_argument("--device", type=str, default=None,
-                   help="device for EncoderNet")
+                   help="device for EncoderNet"
+                   ", (default: by system)")
     p.add_argument("--decorr", type=float, default=0.01,
-                   help="correlation penalty for between features")
+                   help="correlation penalty for between features"
+                   ", (default: %(default)s)")
     p.add_argument("--balance", type=float, default=0.01,
-                   help="unbalance penalty for feature")
+                   help="unbalance penalty for feature"
+                   ", (default: %(default)s)")
 
     # options for data loading
     p.add_argument("--batch_size", type=int, default=128,
-                   help="minibatch size for EncoderNet")
+                   help="minibatch size for EncoderNet"
+                   ", (default: %(default)s)")
     p.add_argument("--shuffle", action="store_false",
-                   help="do not shuffle the dataset")
+                   help="do not shuffle the dataset"
+                   ", (default: %(default)s)")
     p.add_argument('--num_workers', type=int, default=4,
-                   help='Number of workers for data loading (default: 4)')
+                   help='Number of workers for data loading'
+                   ", (default: %(default)s)")
     p.add_argument('--pin_memory', action='store_false',
-                   help='Disable pin memory for faster GPU transfer')
+                   help='Disable pin memory for faster GPU transfer'
+                   ", (default: %(default)s)")
     p.add_argument('--prefetch_factor', type=int, default=2,
-                   help='Prefetch factor for data loading (default: 2)')
+                   help='Prefetch factor for data loading'
+                   ", (default: %(default)s)")
     p.add_argument('--persistent_workers', action='store_false',
                    help='Disable persistent workers for multiple epochs')
 
     # kappa
     p.add_argument("--score_kmax", type=int, default=40,
-                   help="max kappa for score scan")
+                   help="max kappa for score scan"
+                   ", (default: %(default)s)")
     p.add_argument("--score_kmin", type=int, default=2,
-                   help="min kappa for score scan")
+                   help="min kappa for score scan"
+                   ", (default: %(default)s)")
     p.add_argument("--score_kstep", type=int, default=None,
                    help="kappa step for score scan")
     p.add_argument("--kappa", type=int, default=None,
@@ -102,9 +117,9 @@ def parse_args():
 
     # set output path
     if args.output is None:
-        args.output = f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers}L{args.nFeature}F"
+        args.output = f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers+2}L{args.nFeature}F"
     elif (args.output.endswith("/")):
-        args.output += f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers}L{args.nFeature}F"
+        args.output += f"{os.path.basename(args.fname)}-{args.feature}-MLP{args.nLayers+2}L{args.nFeature}F"
     # set model cache path
     if args.cache is None:
         args.cache = os.path.join(os.path.dirname(args.output), "models",

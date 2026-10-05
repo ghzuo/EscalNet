@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 13:55:16
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-01 Thursday 22:58:44
+@Last Modified Time: 2026-10-03 Saturday 08:49:09
 '''
 
 import sys
@@ -92,7 +92,13 @@ class EncoderNet:
     def info(self):
         logging.info("\n=== EncoderNet Info ===")
         logging.info(f"--- The input data:\n*** The X shape: {self.X.shape}")
-        logging.info(f"*** The FFT base shape: {self.fft.F[0].shape}")
+        if type(self.fft.E0) is list:
+            logging.info(
+                f"*** The Energy shape: {self.fft.E0[0].shape} * {len(self.fft.E0)}")
+        else:
+            logging.info(f"*** The Energy shape: {self.fft.E0.shape}")
+        logging.info(
+            f"*** The FFT base shape: {self.fft.F[0].shape} * {len(self.fft.F)}")
         logging.info(f"\n--- The network is: {self.net.__name__}\n{self.net}")
         logging.info(f"\n--- The training information is as follows:")
         logging.info(f"*** KFold: {self.kfold}")
@@ -283,12 +289,17 @@ class EncoderNet:
         handle = net_cpu.output.register_forward_hook(
             hook=lambda module, fin, fout: features.append(fin))
         # get the effect energy and features
+        rescl = {'A': net_cpu.output.weight.detach().numpy()[0]}
         Ee = deNormlize(net_cpu(X_cpu), self.ym, self.ys).detach().numpy()
-        rescl = {
-            "Ee": np.split(Ee, len(self.fft.X0)) if self.fft.X0 is list else Ee,
-            'X': (features[0][0] * net_cpu.output.weight).detach().numpy(),
-            'A': net_cpu.output.weight.detach().numpy()[0]
-        }
+        Xr =(features[0][0] * net_cpu.output.weight).detach().numpy()
+        if type(self.fft.E0) is list:
+            num_traj = len(self.fft.E0)
+            len_traj = len(self.fft.E0[0])
+            rescl['X'] = list(Xr.reshape(num_traj, len_traj, -1))
+            rescl['Ee'] = list(Ee.reshape(num_traj, len_traj))
+        else:
+            rescl['X'] = Xr
+            rescl['Ee'] = Ee
         handle.remove()
         # output the rescaled info
         logging.info(
@@ -337,14 +348,15 @@ class LR(torch.nn.Module):
 
 
 class MLPxL(torch.nn.Module):
-    def __init__(self, nInput, nFeature=20, nHidden=None, nLayers=3, **kwargs):
+    def __init__(self, nInput, nFeature=16, nHidden=None, nLayers=1, **kwargs):
         super(MLPxL, self).__init__(**kwargs)
-        if nLayers < 2:
-            raise ValueError(f"nLayers must be at least 2 (current: {nLayers:d})")
+        if nLayers < 0:
+            raise ValueError(
+                f"The number of hidden layers can not be negative (current: {nLayers:d})")
         if nHidden is None:
             nHidden = int((nInput + nFeature)/2)
 
-        self.__name__ = f"MLP{nLayers:d}L{nFeature:d}F"
+        self.__name__ = f"MLP{nLayers+2:d}L{nFeature:d}F"
         actfunc = torch.nn.ELU
         self.input = torch.nn.Linear(nInput, nHidden)
         self.actI = actfunc()
