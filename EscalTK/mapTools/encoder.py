@@ -10,7 +10,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2023-05-20 13:55:16
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-03 Saturday 08:49:09
+@Last Modified Time: 2026-10-07 Wednesday 21:50:58
 '''
 
 import sys
@@ -65,7 +65,7 @@ class EncoderNet:
                  kfold=5, num_epochs=10,
                  loss=torch.nn.MSELoss(),
                  optim=torch.optim.Adam, lr=0.001,
-                 balance=0.01, decorr=0.01,
+                 balance=0.01, decorr=0.01, weight_decay=0.0005,
                  device=None, **kwargs):
         self.net = net
         self.fft = fft
@@ -80,7 +80,7 @@ class EncoderNet:
         self.shuffle = shuffle
         self.balance = balance
         self.decorr = decorr
-        self.optim = optim(self.net.parameters(), lr, weight_decay=0.0005)
+        self.optim = optim(self.net.parameters(), lr, weight_decay=weight_decay)
         self.X = torch.tensor(self.fft.Xx, dtype=torch.float)
         # set device
         if device is None:
@@ -140,13 +140,18 @@ class EncoderNet:
             # feature regularization
             feat = feat_holder[0]
             if feat is not None:
+                feat = feat * self.net.output.weight
                 feat_c = feat - feat.mean(dim=0, keepdim=True)
                 cov = (feat_c.T @ feat_c) / feat.size(0)
                 if self.decorr > 0:
                     offdiag = cov - torch.diag(cov.diag())
                     loss = loss + self.decorr * (offdiag ** 2).sum()
                 if self.balance > 0:
+                    # balance the feature variance, weak
                     loss = loss + self.balance * cov.diag().var()
+                    # set feature variance to be 1.0, strong
+                    # std = torch.sqrt(cov.diag() + 1e-4)
+                    # loss = loss + self.balance * torch.relu(1.0 - std).mean()
             running_loss += loss.item()
             # Backward pass
             self.optim.zero_grad()
@@ -361,7 +366,7 @@ class MLPxL(torch.nn.Module):
         self.input = torch.nn.Linear(nInput, nHidden)
         self.actI = actfunc()
         self.hidden_layers = torch.nn.ModuleList(
-            [torch.nn.Linear(nHidden, nHidden) for _ in range(nLayers - 2)])
+            [torch.nn.Linear(nHidden, nHidden) for _ in range(nLayers)])
         self.actH = actfunc()
         self.feature = torch.nn.Linear(nHidden, nFeature)
         self.actF = actfunc()

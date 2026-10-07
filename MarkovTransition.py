@@ -19,8 +19,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+import os
 
 from EscalTK import basicTools as bt
+from EscalTK import MarkovState as ms
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -90,57 +92,6 @@ def sortClusterID(clx):
     return np.array(list(map(lambda e: mx[e], clx)))
 
 
-# get markov matrix
-def markovMatrix(cl, lag=1):
-    nStat = len(np.unique(cl))
-    mat = np.zeros((nStat, nStat))
-    np.add.at(mat, (cl[:-lag], cl[lag:]), 1)
-    mat = (mat + mat.T)/2
-    rowSum = mat.sum(axis=1, keepdims=True)
-    return (mat/rowSum).T
-
-
-def stationaryItem(mm):
-    ex, ev = np.linalg.eigh(mm)
-    v = ev[:, np.argmax(ex)]
-    return v/v.sum()
-
-
-def histogram(cl):
-    _, counts = np.unique(cl, return_counts=True)
-    prob = counts / len(cl)
-    return prob
-
-
-def traj_stat_survival(cl, lags, ndx=0, z=1.96):
-    cl = np.asarray(cl)
-    n = len(cl)
-    tmax = lags[-1]
-    if tmax >= n:
-        raise ValueError("tmax must be smaller than the length of cl")
-    nlen = n - tmax
-    start_mask = cl[:nlen] == ndx
-    denom = start_mask.sum()
-    probs = np.zeros(len(lags), dtype=[('value', float), ('error', float)])
-    for i, t in enumerate(lags):
-        end_mask = cl[t: t + nlen] == ndx
-        p = (start_mask & end_mask).sum() / denom
-        probs[i]['value'] = p
-        probs[i]['error'] = z * np.sqrt(p * (1 - p) / denom)
-    return probs
-
-
-def markov_state_survival(mat, lags, ndx=0):
-    mat = np.asarray(mat, dtype=float)
-    prob = np.zeros_like(lags, dtype=float)
-    for i, lag in enumerate(lags):
-        if lag == 0:
-            prob[i] = 1.0
-        else:
-            mm = np.linalg.matrix_power(mat, lag)
-            prob[i] = mm[ndx, ndx]
-    return prob
-
 
 def cktest_plot(ax, time, ptraj, pmarkov):
     """Plot the cktest results."""
@@ -164,22 +115,22 @@ def main():
     cl = sortClusterID(cl)
 
     # transition matrix and markov tests
-    T = markovMatrix(cl, args.t_lag)
+    T = ms.markovMatrix(cl, args.t_lag)
     states = [f"S{x}" for x in range(0,len(T))]
     df = pd.DataFrame(T,  index=states, 
                       columns=pd.MultiIndex.from_tuples(
                       [("Markov Matrix", x) for x in states]))
-    df[('Distribution','Stationary')] = stationaryItem(T)
-    df[('Distribution','Counting')] = histogram(cl)
+    df[('Distribution','Stationary')] = ms.stationaryItem(T)
+    df[('Distribution','Counting')] = ms.histogram(cl)
     pd.set_option('display.float_format', lambda x: f'{x:.4f}')
     logging.info(f"\n*** The Markov Statistics for (t_lag={args.t_lag}) is:\n{df}")
 
     # get survival probability
     lags = np.arange(0, args.lag_max, args.lag_step)
     time = lags * uTime
-    ptraj = traj_stat_survival(cl, lags, args.ndx, args.z)
+    ptraj = ms.traj_stat_survival(cl, lags, args.ndx, args.z)
     # get markov state survival probability
-    pmarkov = markov_state_survival(T, lags, args.ndx)
+    pmarkov = ms.markov_state_survival(T, lags, args.ndx)
 
     # plot
     fig, ax = plt.subplots(figsize=(10, 6))

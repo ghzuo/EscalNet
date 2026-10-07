@@ -9,7 +9,7 @@ Dr. Guanghong Zuo <ghzuo@ucas.ac.cn>
 @Author: Dr. Guanghong Zuo
 @Date: 2026-09-11 Friday 21:12:42
 @Last Modified By: Dr. Guanghong Zuo
-@Last Modified Time: 2026-10-05 Monday 15:21:29
+@Last Modified Time: 2026-10-07 Wednesday 21:17:15
 '''
 
 import pickle
@@ -65,27 +65,30 @@ def parse_args():
     p.add_argument("--kfold", type=int, default=5,
                    help="number of folds for cross-validation"
                    ", (default: %(default)s)")
-    p.add_argument("--learning_rate", type=float, default=0.01,
+    p.add_argument("--learning_rate", type=float, default=0.05,
                    help="learning rate for EncoderNet"
                    ", (default: %(default)s)")
     p.add_argument("--device", type=str, default=None,
                    help="device for EncoderNet"
                    ", (default: by system)")
-    p.add_argument("--decorr", type=float, default=0.01,
+    p.add_argument("--weight_decay", type=float, default=0.005,
+                   help="weight decay for EncoderNet"
+                   ", (default: %(default)s)")
+    p.add_argument("--decorr", type=float, default=0.005,
                    help="correlation penalty for between features"
                    ", (default: %(default)s)")
-    p.add_argument("--balance", type=float, default=0.01,
+    p.add_argument("--balance", type=float, default=0.005,
                    help="unbalance penalty for feature"
                    ", (default: %(default)s)")
 
     # options for data loading
-    p.add_argument("--batch_size", type=int, default=128,
+    p.add_argument("--batch_size", type=int, default=512,
                    help="minibatch size for EncoderNet"
                    ", (default: %(default)s)")
     p.add_argument("--shuffle", action="store_false",
                    help="do not shuffle the dataset"
                    ", (default: %(default)s)")
-    p.add_argument('--num_workers', type=int, default=4,
+    p.add_argument('--num_workers', type=int, default=2,
                    help='Number of workers for data loading'
                    ", (default: %(default)s)")
     p.add_argument('--pin_memory', action='store_false',
@@ -98,7 +101,7 @@ def parse_args():
                    help='Disable persistent workers for multiple epochs')
 
     # kappa
-    p.add_argument("--score_kmax", type=int, default=40,
+    p.add_argument("--score_kmax", type=int, default=35,
                    help="max kappa for score scan"
                    ", (default: %(default)s)")
     p.add_argument("--score_kmin", type=int, default=2,
@@ -207,6 +210,7 @@ def main(args):
                          cachePref=args.cache, shuffle=args.shuffle,
                          num_epochs=args.num_epochs, kfold=args.kfold,
                          decorr=args.decorr, balance=args.balance,
+                         weight_decay=args.weight_decay,
                          device=args.device, **kwargs)
     xmap.info()
 
