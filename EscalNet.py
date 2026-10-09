@@ -18,6 +18,8 @@ import logging
 import os
 import numpy as np
 import sys
+import time
+from datetime import timedelta
 
 from EscalTK.mapTools import encoder as mt
 from EscalTK.Etranform import Efft as et
@@ -65,24 +67,24 @@ def parse_args():
     p.add_argument("--kfold", type=int, default=5,
                    help="number of folds for cross-validation"
                    ", (default: %(default)s)")
-    p.add_argument("--learning_rate", type=float, default=0.05,
+    p.add_argument("--learning_rate", type=float, default=0.01,
                    help="learning rate for EncoderNet"
                    ", (default: %(default)s)")
     p.add_argument("--device", type=str, default=None,
                    help="device for EncoderNet"
                    ", (default: by system)")
-    p.add_argument("--weight_decay", type=float, default=0.005,
+    p.add_argument("--weight_decay", type=float, default=0.001,
                    help="weight decay for EncoderNet"
                    ", (default: %(default)s)")
-    p.add_argument("--decorr", type=float, default=0.005,
+    p.add_argument("--decorr", type=float, default=0.01,
                    help="correlation penalty for between features"
                    ", (default: %(default)s)")
-    p.add_argument("--balance", type=float, default=0.005,
+    p.add_argument("--balance", type=float, default=0.01,
                    help="unbalance penalty for feature"
                    ", (default: %(default)s)")
 
     # options for data loading
-    p.add_argument("--batch_size", type=int, default=512,
+    p.add_argument("--batch_size", type=int, default=1024,
                    help="minibatch size for EncoderNet"
                    ", (default: %(default)s)")
     p.add_argument("--shuffle", action="store_false",
@@ -242,5 +244,8 @@ def main(args):
 
 
 if __name__ == "__main__":
+    start = time.perf_counter()
     args = parse_args()
     main(args)
+    end = time.perf_counter()
+    logging.info(f"Time elapsed: {timedelta(seconds=int(end - start))}")
