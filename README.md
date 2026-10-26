@@ -1,4 +1,4 @@
-# EscalKNM
+# EscalNet
 
 EscalNet is a Python package for analyzing molecular dynamics simulations based on the effective energy and plotting results based on Jupyter Notebook tools.
 
@@ -10,8 +10,7 @@ The effective energy, which was filtered from the total potential energy of simu
 - Numpy, Pandas, Matplotlib, Seaborn
 - Sklearn, PyTorch
 
-## Main Functions/Scripts
+## Main Functions
 
-- EscalNet.py: Analyze the effective energy of molecular dynamics simulations
-- MarkovTransition.py: Analyze the Markov transition matrix
-- EscalNet.ipynb: Plot the results based on Jupyter Notebook tools
+- EscalNet.py: Analyze the effective energy of molecular dynamics simulations, type `EscalNet -h` for input arguments.
+- EscalNet.ipynb: Downstream analysis and data visualization

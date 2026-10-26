@@ -134,4 +134,4 @@ def clplot(score, cl, lab):
     plt.legend(handlelength=0, markerscale=0)
 
     plt.subplot(224)
-    (pd.value_counts(clx, sort=False)/len(clx)).plot.bar(rot=0)
+    (pd.Series(clx).value_counts(sort=False)/len(clx)).plot.bar(rot=0)
